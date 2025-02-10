@@ -34,6 +34,7 @@ enum class RCode {
     RCODE_NOT_FOUND_SERVICE,
     RCODE_INVALID_OPTYPE,
     RCODE_NOT_FOUND_TOPIC,
+	RCODE_DUPLICATE_REGISTRY,
     RCODE_INTERNAL_ERROR
 };
 static std::string errReason(RCode code) {
@@ -47,6 +48,7 @@ static std::string errReason(RCode code) {
         "没有找到对应的服务！",
         "无效的操作类型",
         "没有找到对应的主题！",
+		"重复注册服务",
         "内部错误！"};
     if (code < RCode::RCODE_OK || code > RCode::RCODE_INTERNAL_ERROR)
         return "未知错误！";
@@ -69,6 +71,7 @@ enum class TopicOptype {
 
 enum class ServiceOptype {
     SERVICE_REGISTRY = 0,
+	SERVICE_DEREGISTER,
     SERVICE_DISCOVERY,
     SERVICE_ONLINE,
     SERVICE_OFFLINE,
