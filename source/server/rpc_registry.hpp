@@ -78,9 +78,9 @@ class ProviderManager {
     std::unordered_map<BaseConnection::ptr, std::unordered_set<std::pair<std::string, Address>>> _connections;
 };
 
-class RequesterManager {
+class DiscovererManager {
    public:
-    using ptr = std::shared_ptr<RequesterManager>;
+    using ptr = std::shared_ptr<DiscovererManager>;
     void discover(const BaseConnection::ptr& conn, const std::string method) {
         std::unique_lock<std::mutex> lock(_mutex);
         _methods[method].insert(conn);
@@ -130,7 +130,7 @@ class Registry {
     using ptr = std::shared_ptr<Registry>;
     Registry()
         : _providers(std::make_shared<ProviderManager>()),
-          _requesters(std::make_shared<RequesterManager>()) {}
+          _requesters(std::make_shared<DiscovererManager>()) {}
     void OnServiceRequest(const BaseConnection::ptr& conn, const ServiceRequest::ptr& msg) {
         auto optype = msg->optype();
         if (optype == ServiceOptype::SERVICE_REGISTRY) {
@@ -206,7 +206,7 @@ class Registry {
     }
 
     ProviderManager::ptr _providers;
-    RequesterManager::ptr _requesters;
+    DiscovererManager::ptr _requesters;
 };
 
 }  // namespace server

@@ -51,6 +51,17 @@ class JSON {
         body = ss.str();
         return true;
     }
+    static std::string serialize(const Json::Value& val) {
+        std::stringstream ss;
+        Json::StreamWriterBuilder swb;
+        std::unique_ptr<Json::StreamWriter> sw(swb.newStreamWriter());
+        int ret = sw->write(val, &ss);
+        if (ret != 0) {
+            ELOG("serialize json failed");
+            return "";
+        }
+        return ss.str();
+    }
 
     static bool unserialize(const std::string& body, Json::Value& val) {
         Json::CharReaderBuilder crb;

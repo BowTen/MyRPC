@@ -8,7 +8,6 @@
 #include <muduo/net/TcpConnection.h>
 #include <muduo/net/TcpServer.h>
 #include <mutex>
-#include <unordered_map>
 #include "abstract.hpp"
 #include "detail.hpp"
 #include "fields.hpp"
@@ -148,23 +147,42 @@ class ConnectionFactory {
     }
 };
 
-class MuduoServer : public BaseServer {
+class MyServer : public BaseServer {
    public:
-    using ptr = std::shared_ptr<MuduoServer>;
-    MuduoServer(int port)
+    using ptr = std::shared_ptr<MyServer>;
+    MyServer(int port, int max_connections = (1 << 16))
         : _server(&_baseloop, muduo::net::InetAddress("0.0.0.0", port), "MuduoServer", muduo::net::TcpServer::kReusePort),
-          _protocol(ProtocolFactory::create()) {}
+          _protocol(ProtocolFactory::create()),
+          _max_connections(max_connections) {}
     virtual void start() {
-        _server.setConnectionCallback(std::bind(&MuduoServer::onConnection, this, std::placeholders::_1));
-        _server.setMessageCallback(std::bind(&MuduoServer::onMessage, this,
+        _server.setConnectionCallback(std::bind(&MyServer::onConnection, this, std::placeholders::_1));
+        _server.setMessageCallback(std::bind(&MyServer::onMessage, this,
                                              std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         _server.start();   // 先开始监听
         _baseloop.loop();  // 开始死循环事件监控
+    }
+    int connectionNumber() {
+        return _conns.size();
+    }
+    void setMaxConnections(int cnt) {
+        std::unique_lock<std::mutex> lock(_mutex);
+        _max_connections = cnt;
     }
 
    private:
     void onConnection(const muduo::net::TcpConnectionPtr& conn) {
         if (conn->connected()) {
+            if (connectionNumber() >= _max_connections) {
+                ELOG("连接数已达上限：%d/%d", connectionNumber(), _max_connections);
+                auto msg = MessageFactory::create<ConnectResponse>();
+                msg->setId(UUID::uuid());
+                msg->setMType(MType::RSP_CONNECT);
+                msg->setRCode(RCode::RCODE_CONNECT_OVERFLOW);
+                conn->send(_protocol->serialize(msg));
+                conn->shutdown();
+                return;
+            }
+
             std::cout << "连接建立！\n";
             auto muduo_conn = ConnectionFactory::create(conn, _protocol);
             {
@@ -230,6 +248,7 @@ class MuduoServer : public BaseServer {
 
    private:
     const size_t maxDataSize = (1 << 16);
+    int _max_connections = (1 << 16);
     BaseProtocol::ptr _protocol;
     muduo::net::EventLoop _baseloop;
     muduo::net::TcpServer _server;
@@ -240,23 +259,23 @@ class ServerFactory {
    public:
     template <typename... Args>
     static BaseServer::ptr create(Args&&... args) {
-        return std::make_shared<MuduoServer>(std::forward<Args>(args)...);
+        return std::make_shared<MyServer>(std::forward<Args>(args)...);
     }
 };
 
-class MuduoClient : public BaseClient {
+class MyClient : public BaseClient {
    public:
-    using ptr = std::shared_ptr<MuduoClient>;
-    MuduoClient(const std::string& sip, int sport)
+    using ptr = std::shared_ptr<MyClient>;
+    MyClient(const std::string& sip, int sport)
         : _protocol(ProtocolFactory::create()),
           _baseloop(_loopthread.startLoop()),
           _downlatch(1),
           _client(_baseloop, muduo::net::InetAddress(sip, sport), "MuduoClient") {}
     virtual void connect() override {
         DLOG("设置回调函数，连接服务器");
-        _client.setConnectionCallback(std::bind(&MuduoClient::onConnection, this, std::placeholders::_1));
+        _client.setConnectionCallback(std::bind(&MyClient::onConnection, this, std::placeholders::_1));
         // 设置连接消息的回调
-        _client.setMessageCallback(std::bind(&MuduoClient::onMessage, this,
+        _client.setMessageCallback(std::bind(&MyClient::onMessage, this,
                                              std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
         // 连接服务器
@@ -273,7 +292,7 @@ class MuduoClient : public BaseClient {
             return false;
         }
         _conn->send(msg);
-		return true;
+        return true;
     }
     virtual BaseConnection::ptr connection() override {
         return _conn;
@@ -335,7 +354,12 @@ class ClientFactory {
    public:
     template <typename... Args>
     static BaseClient::ptr create(Args&&... args) {
-        return std::make_shared<MuduoClient>(std::forward<Args>(args)...);
+        return std::make_shared<BaseClient>(std::forward<Args>(args)...);
+    }
+    template <typename T, typename... Args>
+    static std::shared_ptr<T> create(Args&&... args) {
+        return std::make_shared<T>(std::forward<Args>(args)...);
     }
 };
+
 }  // namespace btrpc

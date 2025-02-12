@@ -13,7 +13,7 @@ void rpc_rsp(const btrpc::BaseConnection::ptr& conn, btrpc::RpcResponse::ptr& ms
 	btrpc::JSON::serialize(res, jsonstr);
 	std::cout << "result:\n" << jsonstr << '\n';
 }
-void tpc_rsp(const btrpc::BaseConnection::ptr& conn, btrpc::TopicResponse::ptr& msg){
+void tpc_rsp(const btrpc::BaseConnection::ptr& conn, btrpc::ConnectResponse::ptr& msg){
 	std::cout << "收到topic响应\n";
 	auto jsonstr = msg->serialize();
 	std::cout << "response body:\n" << jsonstr << '\n';
@@ -38,7 +38,7 @@ int main(int  argc, char* argv[]){
 
 	auto dsp = std::make_shared<btrpc::Dispatcher>();
 	dsp->registerHandler<btrpc::BaseMessage>(btrpc::MType::RSP_RPC, requestor_cb);
-	dsp->registerHandler<btrpc::TopicResponse>(btrpc::MType::RSP_TOPIC, tpc_rsp);
+	dsp->registerHandler<btrpc::ConnectResponse>(btrpc::MType::RSP_TOPIC, tpc_rsp);
 
 	auto client = btrpc::ClientFactory::create("127.0.0.1", port);
 	client->setMessageCallback(std::bind(&btrpc::Dispatcher::onMessage, dsp.get(),
@@ -58,7 +58,8 @@ int main(int  argc, char* argv[]){
 			std::cout << "请输入方法名：";
 			std::cin >> str;
 			std::cout << "请输入整数分割的两个数：";
-			int num1, num2;
+			int num1;
+			double num2;
 			std::cin >> num1 >> num2;
 			Json::Value params, result;
 			params["num1"] = num1;

@@ -18,6 +18,7 @@ namespace btrpc {
 enum class MType {
     REQ_RPC = 0,
     RSP_RPC,
+	RSP_CONNECT,
     REQ_TOPIC,
     RSP_TOPIC,
     REQ_SERVICE,
@@ -26,6 +27,7 @@ enum class MType {
 
 enum class RCode {
     RCODE_OK = 0,
+	RCODE_CONNECT_OVERFLOW,
     RCODE_PARSE_FAILED,
     RCODE_ERROR_MSGTYPE,
     RCODE_INVALID_MSG,
@@ -40,6 +42,7 @@ enum class RCode {
 static std::string errReason(RCode code) {
     static std::vector<std::string> err_map = {
         "成功处理！",
+		"服务器连接超限",
         "消息解析失败！",
         "消息类型错误！",
         "无效消息",

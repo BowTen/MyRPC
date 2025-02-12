@@ -202,9 +202,9 @@ class RpcResponse : public JsonResponse {
         _body[KEY_RESULT] = result;
     }
 };
-class TopicResponse : public JsonResponse {
+class ConnectResponse : public JsonResponse {
    public:
-    using ptr = std::shared_ptr<TopicResponse>;
+    using ptr = std::shared_ptr<ConnectResponse>;
 };
 class ServiceResponse : public JsonResponse {
    public:
@@ -275,7 +275,7 @@ class MessageFactory {
             case MType::REQ_TOPIC:
                 return std::make_shared<TopicRequest>();
             case MType::RSP_TOPIC:
-                return std::make_shared<TopicResponse>();
+                return std::make_shared<ConnectResponse>();
             case MType::REQ_SERVICE:
                 return std::make_shared<ServiceRequest>();
             case MType::RSP_SERVICE:

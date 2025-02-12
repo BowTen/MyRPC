@@ -4,3 +4,7 @@ muduo
 *.out
 source/common/client
 source/common/server
+source/common/2client
+source/common/2server
+source/common/makefile
+source/common/makefile

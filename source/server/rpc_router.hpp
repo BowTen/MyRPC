@@ -13,12 +13,12 @@ enum class VType {
     ARRAY,
     OBJECT,
 };
-class ServiceDescribe {
+class MethodDescribe {
    public:
-    using ptr = std::shared_ptr<ServiceDescribe>;
-    using ServiceCallback = std::function<void(const Json::Value&, Json::Value&)>;  //参数  结果
+    using ptr = std::shared_ptr<MethodDescribe>;
+    using MethodCallback = std::function<void(const Json::Value&, Json::Value&)>;  //参数  结果
     using ParamsDescribe = std::pair<std::string, VType>;
-    ServiceDescribe(std::string&& mname, std::vector<ParamsDescribe>&& desc, VType vtype, ServiceCallback&& handler)
+    MethodDescribe(std::string&& mname, std::vector<ParamsDescribe>&& desc, VType vtype, MethodCallback&& handler)
         : _method_name(std::move(mname)), _callback(std::move(handler)), _params_desc(std::move(desc)), _return_type(vtype) {}
     const std::string& method() { return _method_name; }
     // 针对收到的请求中的参数进行校验
@@ -71,7 +71,7 @@ class ServiceDescribe {
 
    private:
     std::string _method_name;                  // 方法名称
-    ServiceCallback _callback;                 // 实际的业务回调函数
+    MethodCallback _callback;                 // 实际的业务回调函数
     std::vector<ParamsDescribe> _params_desc;  // 参数字段格式描述
     VType _return_type;                        // 结果作为返回值类型的描述
 };
@@ -85,35 +85,35 @@ class SDescribeFactory {
         _return_type = vtype;
     }
     void setParamsDesc(const std::string& pname, VType vtype) {
-        _params_desc.push_back(ServiceDescribe::ParamsDescribe(pname, vtype));
+        _params_desc.push_back(MethodDescribe::ParamsDescribe(pname, vtype));
     }
-    void setCallback(const ServiceDescribe::ServiceCallback& cb) {
+    void setCallback(const MethodDescribe::MethodCallback& cb) {
         _callback = cb;
     }
-    ServiceDescribe::ptr build() {
-        return std::make_shared<ServiceDescribe>(std::move(_method_name),
+    MethodDescribe::ptr build() {
+        return std::make_shared<MethodDescribe>(std::move(_method_name),
                                                  std::move(_params_desc), _return_type, std::move(_callback));
     }
 
    private:
     std::string _method_name;
-    ServiceDescribe::ServiceCallback _callback;                 // 实际的业务回调函数
-    std::vector<ServiceDescribe::ParamsDescribe> _params_desc;  // 参数字段格式描述
+    MethodDescribe::MethodCallback _callback;                 // 实际的业务回调函数
+    std::vector<MethodDescribe::ParamsDescribe> _params_desc;  // 参数字段格式描述
     VType _return_type;                                         // 结果作为返回值类型的描述
 };
 
 class ServiceManager {
    public:
     using ptr = std::shared_ptr<ServiceManager>;
-    void insert(const ServiceDescribe::ptr& desc) {
+    void insert(const MethodDescribe::ptr& desc) {
         std::unique_lock<std::mutex> lock(_mutex);
         _services.insert(std::make_pair(desc->method(), desc));
     }
-    ServiceDescribe::ptr select(const std::string& method_name) {
+    MethodDescribe::ptr select(const std::string& method_name) {
         std::unique_lock<std::mutex> lock(_mutex);
         auto it = _services.find(method_name);
         if (it == _services.end()) {
-            return ServiceDescribe::ptr();
+            return MethodDescribe::ptr();
         }
         return it->second;
     }
@@ -124,7 +124,7 @@ class ServiceManager {
 
    private:
     std::mutex _mutex;
-    std::unordered_map<std::string, ServiceDescribe::ptr> _services;
+    std::unordered_map<std::string, MethodDescribe::ptr> _services;
 };
 
 class RpcRouter {
@@ -155,7 +155,7 @@ class RpcRouter {
         // 4. 处理完毕得到结果，组织响应，向客户端发送
         return response(conn, request, result, RCode::RCODE_OK);
     }
-    void registerMethod(const ServiceDescribe::ptr& service) {
+    void registerMethod(const MethodDescribe::ptr& service) {
         return _service_manager->insert(service);
     }
 

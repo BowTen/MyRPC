@@ -55,8 +55,8 @@ int main(int argc, char* argv[]){
 	auto rpc_router = std::make_shared<btrpc::server::RpcRouter>();
 	btrpc::server::SDescribeFactory sd_fac;
 	sd_fac.setMethodName("Add");
-	sd_fac.setParamsDesc("num1", btrpc::server::VType::INTEGRAL);
-	sd_fac.setParamsDesc("num2", btrpc::server::VType::INTEGRAL);
+	sd_fac.setParamsDesc("num1", btrpc::server::VType::NUMERIC);
+	sd_fac.setParamsDesc("num2", btrpc::server::VType::NUMERIC);
 	sd_fac.setReturnType(btrpc::server::VType::INTEGRAL);
 	sd_fac.setCallback(Add);
 	rpc_router->registerMethod(sd_fac.build());
