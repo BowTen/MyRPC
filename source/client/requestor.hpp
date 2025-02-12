@@ -47,6 +47,7 @@ class Requestor {
         return true;
     }
     bool send(const BaseConnection::ptr& conn, const BaseMessage::ptr& req, BaseMessage::ptr& rsp) {
+        DLOG("开始同步调用...");
         AsyncResponse rsp_future;
         bool ret = send(conn, req, rsp_future);
         if (ret == false) {

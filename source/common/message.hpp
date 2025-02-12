@@ -272,6 +272,8 @@ class MessageFactory {
                 return std::make_shared<RpcRequest>();
             case MType::RSP_RPC:
                 return std::make_shared<RpcResponse>();
+            case MType::RSP_CONNECT:
+                return std::make_shared<ConnectResponse>();
             case MType::REQ_TOPIC:
                 return std::make_shared<TopicRequest>();
             case MType::RSP_TOPIC:
@@ -289,4 +291,4 @@ class MessageFactory {
         return std::make_shared<T>(std::forward(args)...);
     }
 };
-}  // namespace bitrpc
+}  // namespace btrpc

@@ -295,6 +295,15 @@ class MyClient : public BaseClient {
         return true;
     }
     virtual BaseConnection::ptr connection() override {
+		for(int i = 1;i <= 50;i++){
+			if(_conn == nullptr){
+				usleep(1000 * 100);
+			}
+		}
+		if(_conn == nullptr){
+			ELOG("服务器连接失败");
+			exit(0);
+		}
         return _conn;
     }
     virtual bool connected() {

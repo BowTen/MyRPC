@@ -22,13 +22,28 @@ class RpcClient {
                                 std::placeholders::_1, std::placeholders::_2);
         _dispatcher->registerHandler<BaseMessage>(MType::RSP_RPC, rsp_cb);
 
-        _client->connect();
+        auto rsp_conn_cb = std::bind(&RpcClient::onConnectMessage, this,
+                                     std::placeholders::_1, std::placeholders::_2);
+        _dispatcher->registerHandler<ConnectResponse>(MType::RSP_CONNECT, rsp_conn_cb);
+
+            _client->connect();
         _conn = _client->connection();
+		if(_conn == nullptr){
+			DLOG("_conn为空");
+			exit(0);
+		}
     }
 
-	bool call(const std::string& method, const Json::Value &params, Json::Value &reslut){
-		return _caller->call(_conn, method, params, reslut);
-	}
+    bool call(const std::string& method, const Json::Value& params, Json::Value& reslut) {
+        return _caller->call(_conn, method, params, reslut);
+    }
+
+    void onConnectMessage(const BaseConnection::ptr& conn, ConnectResponse::ptr& msg) {
+        ELOG("服务端连接信息：%s", errReason(msg->rcode()).c_str());
+		if(msg->rcode() == RCode::RCODE_CONNECT_OVERFLOW){
+			exit(0);
+		}
+    }
 
    private:
     MyClient::ptr _client;
