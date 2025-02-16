@@ -1,41 +1,44 @@
-#include "../common/dispatcher.hpp"
-#include "../common/net.hpp"
-#include "requestor.hpp"
-#include "rpc_caller.hpp"
+#pragma once
+#include "client.hpp"
 
 namespace btrpc {
 namespace client {
 
-class RpcClient {
+class RpcClient : public Client {
    public:
     using ptr = std::shared_ptr<RpcClient>;
-    RpcClient(const std::string& sip, int sport)
-        : _client(ClientFactory::create<MyClient>(sip, sport)),
-          _dispatcher(std::make_shared<Dispatcher>()),
-          _requestor(std::make_shared<Requestor>()),
-          _caller(std::make_shared<RpcCaller>(_requestor)) {
-        auto msg_cb = std::bind(&Dispatcher::onMessage, _dispatcher.get(),
-                                std::placeholders::_1, std::placeholders::_2);
-        _client->setMessageCallback(msg_cb);
+    RpcClient(const std::string& sip, int sport) : Client(sip, sport) {}
 
-        auto rsp_cb = std::bind(&btrpc::client::Requestor::onResponse, _requestor.get(),
-                                std::placeholders::_1, std::placeholders::_2);
-        _dispatcher->registerHandler<BaseMessage>(MType::RSP_RPC, rsp_cb);
-
-        auto rsp_conn_cb = std::bind(&RpcClient::onConnectMessage, this,
-                                     std::placeholders::_1, std::placeholders::_2);
-        _dispatcher->registerHandler<ConnectResponse>(MType::RSP_CONNECT, rsp_conn_cb);
-
-            _client->connect();
-        _conn = _client->connection();
-		if(_conn == nullptr){
-			DLOG("_conn为空");
-			exit(0);
-		}
-    }
-
-    bool call(const std::string& method, const Json::Value& params, Json::Value& reslut) {
-        return _caller->call(_conn, method, params, reslut);
+	bool call(const std::string& method, const Json::Value& params, Json::Value& result) {
+        DLOG("开始同步rpc调用...");
+        // 1. 组织请求
+        auto req_msg = MessageFactory::create<RpcRequest>();
+        //req_msg->setId(UUID::uuid());
+        req_msg->setMType(MType::REQ_RPC);
+        req_msg->setMethod(method);
+        req_msg->setParams(params);
+		DLOG("rpc请求 id=%s", req_msg->rid().c_str());
+        BaseMessage::ptr rsp_msg;
+        // 2. 发送请求
+        bool ret = send(std::dynamic_pointer_cast<BaseMessage>(req_msg), rsp_msg);
+        if (ret == false) {
+            ELOG("同步Rpc请求失败！");
+            return false;
+        }
+        DLOG("收到响应，进行解析，获取结果!");
+        // 3. 等待响应
+        auto rpc_rsp_msg = std::dynamic_pointer_cast<RpcResponse>(rsp_msg);
+        if (!rpc_rsp_msg) {
+            ELOG("rpc响应，向下类型转换失败！");
+            return false;
+        }
+        if (rpc_rsp_msg->rcode() != RCode::RCODE_OK) {
+            ELOG("rpc请求出错：%s", errReason(rpc_rsp_msg->rcode()).c_str());
+            return false;
+        }
+        result = rpc_rsp_msg->result();
+        DLOG("结果设置完毕！");
+        return true;
     }
 
     void onConnectMessage(const BaseConnection::ptr& conn, ConnectResponse::ptr& msg) {
@@ -44,13 +47,6 @@ class RpcClient {
 			exit(0);
 		}
     }
-
-   private:
-    MyClient::ptr _client;
-    Dispatcher::ptr _dispatcher;
-    Requestor::ptr _requestor;
-    RpcCaller::ptr _caller;
-    BaseConnection::ptr _conn;
 };
 
 }  // namespace client

@@ -134,6 +134,7 @@ class RpcRouter {
         : _service_manager(std::make_shared<ServiceManager>()) {}
     // 这是注册到Dispatcher模块针对rpc请求进行回调处理的业务函数
     void onRpcRequest(const BaseConnection::ptr& conn, RpcRequest::ptr& request) {
+		DLOG("收到rpc请求 rid=%s", request->rid().c_str());
         // 1. 查询客户端请求的方法描述--判断当前服务端能否提供对应的服务
         auto service = _service_manager->select(request->method());
         if (service.get() == nullptr) {
@@ -171,6 +172,7 @@ class RpcRouter {
         msg->setResult(res);
 		std::string json;
 		btrpc::JSON::serialize(msg->result(), json);
+		DLOG("发送rpc响应 orid=%s, rrid=%s", req->rid().c_str(), msg->rid().c_str());
         conn->send(msg);
     }
 

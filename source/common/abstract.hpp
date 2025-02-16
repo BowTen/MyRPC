@@ -2,24 +2,26 @@
 #include <memory>
 #include <functional>
 #include "fields.hpp"
+#include "detail.hpp"
 
 namespace btrpc {
     class BaseMessage {
         public:
             using ptr = std::shared_ptr<BaseMessage>;
+			BaseMessage() : _rid(UUID::uuid()) {}
             virtual ~BaseMessage(){}
-            virtual void setId(const std::string &id) {
-                _rid = id;
-            }
             virtual std::string rid() { return _rid; }
+			virtual void setId(const std::string &id) {
+				_rid = id;
+			}
             virtual void setMType(MType mtype) {
-                _mtype = mtype;
+				_mtype = mtype;
             }
             virtual MType mtype() { return _mtype; }
             virtual std::string serialize() = 0;
             virtual bool unserialize(const std::string &msg) = 0;
             virtual bool check() = 0;
-        private:
+		protected:
             MType _mtype;
             std::string _rid;
     };
@@ -48,6 +50,7 @@ namespace btrpc {
             virtual void send(const BaseMessage::ptr &msg) = 0;
             virtual void shutdown() = 0;
             virtual bool connected() = 0;
+			virtual Address getHost() = 0;
     };
 
     using ConnectionCallback = std::function<void(const BaseConnection::ptr&)>;

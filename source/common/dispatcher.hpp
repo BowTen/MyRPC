@@ -23,8 +23,9 @@ class Dispatcher {
 	}
 
     void onMessage(const BaseConnection::ptr& conn, BaseMessage::ptr& msg) {
-        // 找到消息类型对应的业务处理函数，进行调用即可
+		// 找到消息类型对应的业务处理函数，进行调用即可
         std::unique_lock<std::mutex> lock(_mutex);
+		//DLOG("dispatcher收到消息，rid=%s", msg->rid().c_str());
 		auto it = _handlers.find(msg->mtype());
 		if(it != _handlers.end()){
 			return (it->second)(conn, msg);

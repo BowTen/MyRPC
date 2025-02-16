@@ -26,6 +26,5 @@ int main(int argc, char* argv[]){
 		std::cout << "result:\n" << btrpc::JSON::serialize(res) << '\n';
 	}
 
-
 	return 0;
 }

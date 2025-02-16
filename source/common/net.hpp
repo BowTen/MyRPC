@@ -118,13 +118,14 @@ class ProtocolFactory {
     }
 };
 
-class MuduoConnection : public BaseConnection {
+class MyConnection : public BaseConnection {
    public:
-    using ptr = std::shared_ptr<MuduoConnection>;
-    MuduoConnection(const muduo::net::TcpConnectionPtr& conn,
+    using ptr = std::shared_ptr<MyConnection>;
+    MyConnection(const muduo::net::TcpConnectionPtr& conn,
                     const BaseProtocol::ptr& protocol)
         : _protocol(protocol), _conn(conn) {}
     virtual void send(const BaseMessage::ptr& msg) override {
+		//DLOG("发送消息 rid=%s", msg->rid().c_str());
         std::string body = _protocol->serialize(msg);
         _conn->send(body);
     }
@@ -134,6 +135,10 @@ class MuduoConnection : public BaseConnection {
     virtual bool connected() override {
         return _conn->connected();
     }
+	Address getHost() override {
+		auto iAddr = _conn->peerAddress();
+		return std::make_pair(iAddr.toIp(), iAddr.port());
+	}
 
    private:
     BaseProtocol::ptr _protocol;
@@ -143,20 +148,20 @@ class ConnectionFactory {
    public:
     template <typename... Args>
     static BaseConnection::ptr create(Args&&... args) {
-        return std::make_shared<MuduoConnection>(std::forward<Args>(args)...);
+        return std::make_shared<MyConnection>(std::forward<Args>(args)...);
     }
 };
 
-class MyServer : public BaseServer {
+class MuduoServer : public BaseServer {
    public:
-    using ptr = std::shared_ptr<MyServer>;
-    MyServer(int port, int max_connections = (1 << 16))
+    using ptr = std::shared_ptr<MuduoServer>;
+    MuduoServer(int port, int max_connections = (1 << 16))
         : _server(&_baseloop, muduo::net::InetAddress("0.0.0.0", port), "MuduoServer", muduo::net::TcpServer::kReusePort),
           _protocol(ProtocolFactory::create()),
           _max_connections(max_connections) {}
     virtual void start() {
-        _server.setConnectionCallback(std::bind(&MyServer::onConnection, this, std::placeholders::_1));
-        _server.setMessageCallback(std::bind(&MyServer::onMessage, this,
+        _server.setConnectionCallback(std::bind(&MuduoServer::onConnection, this, std::placeholders::_1));
+        _server.setMessageCallback(std::bind(&MuduoServer::onMessage, this,
                                              std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         _server.start();   // 先开始监听
         _baseloop.loop();  // 开始死循环事件监控
@@ -175,7 +180,7 @@ class MyServer : public BaseServer {
             if (connectionNumber() >= _max_connections) {
                 ELOG("连接数已达上限：%d/%d", connectionNumber(), _max_connections);
                 auto msg = MessageFactory::create<ConnectResponse>();
-                msg->setId(UUID::uuid());
+                //msg->setId(UUID::uuid());
                 msg->setMType(MType::RSP_CONNECT);
                 msg->setRCode(RCode::RCODE_CONNECT_OVERFLOW);
                 conn->send(_protocol->serialize(msg));
@@ -183,17 +188,17 @@ class MyServer : public BaseServer {
                 return;
             }
 
-            std::cout << "连接建立！\n";
-            auto muduo_conn = ConnectionFactory::create(conn, _protocol);
+			auto my_conn = ConnectionFactory::create(conn, _protocol);
+			ILOG("连接建立 %s:%d", my_conn->getHost().first.c_str(), my_conn->getHost().second);
             {
                 std::unique_lock<std::mutex> lock(_mutex);
-                _conns.insert(std::make_pair(conn, muduo_conn));
+                _conns.insert(std::make_pair(conn, my_conn));
             }
             if (_cb_connection)
-                _cb_connection(muduo_conn);
+                _cb_connection(my_conn);
         } else {
-            std::cout << "连接断开！\n";
-            BaseConnection::ptr muduo_conn;
+			ILOG("连接断开");
+			BaseConnection::ptr muduo_conn;
             {
                 std::unique_lock<std::mutex> lock(_mutex);
                 auto it = _conns.find(conn);
@@ -259,23 +264,23 @@ class ServerFactory {
    public:
     template <typename... Args>
     static BaseServer::ptr create(Args&&... args) {
-        return std::make_shared<MyServer>(std::forward<Args>(args)...);
+        return std::make_shared<MuduoServer>(std::forward<Args>(args)...);
     }
 };
 
-class MyClient : public BaseClient {
+class MuduoClient : public BaseClient {
    public:
-    using ptr = std::shared_ptr<MyClient>;
-    MyClient(const std::string& sip, int sport)
+    using ptr = std::shared_ptr<MuduoClient>;
+    MuduoClient(const std::string& sip, int sport)
         : _protocol(ProtocolFactory::create()),
           _baseloop(_loopthread.startLoop()),
           _downlatch(1),
           _client(_baseloop, muduo::net::InetAddress(sip, sport), "MuduoClient") {}
     virtual void connect() override {
         DLOG("设置回调函数，连接服务器");
-        _client.setConnectionCallback(std::bind(&MyClient::onConnection, this, std::placeholders::_1));
+        _client.setConnectionCallback(std::bind(&MuduoClient::onConnection, this, std::placeholders::_1));
         // 设置连接消息的回调
-        _client.setMessageCallback(std::bind(&MyClient::onMessage, this,
+        _client.setMessageCallback(std::bind(&MuduoClient::onMessage, this,
                                              std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
         // 连接服务器
@@ -316,8 +321,10 @@ class MyClient : public BaseClient {
             std::cout << "连接建立！\n";
             _downlatch.countDown();  // 计数--，为0时唤醒阻塞
             _conn = ConnectionFactory::create(conn, _protocol);
+			if(_cb_connection) _cb_connection(_conn);
         } else {
             std::cout << "连接断开！\n";
+			if(_cb_close) _cb_close(_conn);
             _conn.reset();
         }
     }

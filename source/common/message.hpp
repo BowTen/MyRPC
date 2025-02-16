@@ -4,7 +4,6 @@
 #include "fields.hpp"
 
 namespace btrpc {
-typedef std::pair<std::string, int> Address;
 class JsonMessage : public BaseMessage {
    public:
     using ptr = std::shared_ptr<JsonMessage>;
@@ -55,6 +54,9 @@ class JsonResponse : public JsonMessage {
 class RpcRequest : public JsonRequest {
    public:
     using ptr = std::shared_ptr<RpcRequest>;
+	RpcRequest() {
+		_mtype = MType::REQ_RPC;
+	}
     virtual bool check() override {
         // rpc请求中，包含请求方法名称-字符串，参数字段-对象
         if (_body[KEY_METHOD].isNull() == true ||
@@ -85,6 +87,9 @@ class RpcRequest : public JsonRequest {
 class TopicRequest : public JsonRequest {
    public:
     using ptr = std::shared_ptr<TopicRequest>;
+	TopicRequest() {
+		_mtype = MType::REQ_TOPIC;
+	}
     virtual bool check() override {
         // rpc请求中，包含请求方法名称-字符串，参数字段-对象
         if (_body[KEY_TOPIC_KEY].isNull() == true ||
@@ -129,6 +134,9 @@ class TopicRequest : public JsonRequest {
 class ServiceRequest : public JsonRequest {
    public:
     using ptr = std::shared_ptr<ServiceRequest>;
+	ServiceRequest() {
+		_mtype = MType::REQ_SERVICE;
+	}
     virtual bool check() override {
         // rpc请求中，包含请求方法名称-字符串，参数字段-对象
         if (_body[KEY_METHOD].isNull() == true ||
@@ -183,6 +191,9 @@ class ServiceRequest : public JsonRequest {
 class RpcResponse : public JsonResponse {
    public:
     using ptr = std::shared_ptr<RpcResponse>;
+	RpcResponse() {
+		_mtype = MType::RSP_RPC;
+	}
     virtual bool check() override {
         if (_body[KEY_RCODE].isNull() == true ||
             _body[KEY_RCODE].isIntegral() == false) {
@@ -205,10 +216,16 @@ class RpcResponse : public JsonResponse {
 class ConnectResponse : public JsonResponse {
    public:
     using ptr = std::shared_ptr<ConnectResponse>;
+	ConnectResponse() {
+		_mtype = MType::RSP_CONNECT;
+	}
 };
 class ServiceResponse : public JsonResponse {
    public:
     using ptr = std::shared_ptr<ServiceResponse>;
+	ServiceResponse() {
+		_mtype = MType::RSP_SERVICE;
+	}
     virtual bool check() override {
         if (_body[KEY_RCODE].isNull() == true ||
             _body[KEY_RCODE].isIntegral() == false) {
@@ -230,6 +247,12 @@ class ServiceResponse : public JsonResponse {
         }
         return true;
     }
+	int idleCount(){
+		return _body[KEY_IDLE_COUNT].asInt();
+	}
+	void setIdleCount(int idle){
+		_body[KEY_IDLE_COUNT] = idle;
+	}
     ServiceOptype optype() {
         return (ServiceOptype)_body[KEY_OPTYPE].asInt();
     }
@@ -242,25 +265,15 @@ class ServiceResponse : public JsonResponse {
     void setMethod(const std::string& method) {
         _body[KEY_METHOD] = method;
     }
-    void setHost(std::vector<Address> addrs) {
-        for (auto& addr : addrs) {
-            Json::Value val;
-            val[KEY_HOST_IP] = addr.first;
-            val[KEY_HOST_PORT] = addr.second;
-            _body[KEY_HOST].append(val);
-        }
+    void setHost(const Address& addr) {
+        Json::Value val;
+        val[KEY_HOST_IP] = addr.first;
+        val[KEY_HOST_PORT] = addr.second;
+        _body[KEY_HOST] = val;
     }
-    std::vector<Address> hosts() {
-        std::vector<Address> addrs;
-        int sz = _body[KEY_HOST].size();
-        for (int i = 0; i < sz; i++) {
-            Address addr;
-            addr.first = _body[KEY_HOST][i][KEY_HOST_IP].asString();
-            addr.second = _body[KEY_HOST][i][KEY_HOST_PORT].asInt();
-            addrs.push_back(addr);
-        }
-        return addrs;
-    }
+    Address host() {
+		return std::make_pair(_body[KEY_HOST][KEY_HOST_IP].asString(), _body[KEY_HOST][KEY_HOST_PORT].asInt());
+	}
 };
 
 // 实现一个消息对象的生产工厂

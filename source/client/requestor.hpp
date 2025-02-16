@@ -6,12 +6,13 @@
 
 namespace btrpc {
 namespace client {
+
+using RequestCallback = std::function<void(const BaseMessage::ptr&)>;
+using AsyncResponse = std::future<BaseMessage::ptr>;
 	
 class Requestor {
    public:
     using ptr = std::shared_ptr<Requestor>;
-    using RequestCallback = std::function<void(const BaseMessage::ptr&)>;
-    using AsyncResponse = std::future<BaseMessage::ptr>;
     struct RequestDescribe {
         using ptr = std::shared_ptr<RequestDescribe>;
         BaseMessage::ptr request;
@@ -20,14 +21,18 @@ class Requestor {
         RequestCallback callback;
     };
     void onResponse(const BaseConnection::ptr& conn, BaseMessage::ptr& msg) {
+		DLOG("requestor收到响应 rid=%s", msg->rid().c_str());
         std::string rid = msg->rid();
         RequestDescribe::ptr rdp = getDescribe(rid);
         if (rdp.get() == nullptr) {
             ELOG("收到响应 - %s，但是未找到对应的请求描述！", rid.c_str());
             return;
         }
+		DLOG("requestor找到响应对应的请求");
         if (rdp->rtype == RType::REQ_ASYNC) {
+			DLOG("requestor设置异步结果");
             rdp->response.set_value(msg);
+			DLOG("requestor设置异步成功");
         } else if (rdp->rtype == RType::REQ_CALLBACK) {
             if (rdp->callback)
                 rdp->callback(msg);
@@ -53,7 +58,9 @@ class Requestor {
         if (ret == false) {
             return false;
         }
+		DLOG("异步调用成功")
         rsp = rsp_future.get();
+		DLOG("同步调用成功 rsp_rid=%s", rsp->rid().c_str());
         return true;
     }
     bool send(const BaseConnection::ptr& conn, const BaseMessage::ptr& req, const RequestCallback& cb) {
