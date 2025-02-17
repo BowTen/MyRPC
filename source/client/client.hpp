@@ -2,9 +2,8 @@
 #include "../common/dispatcher.hpp"
 #include "../common/net.hpp"
 #include "requestor.hpp"
-#include "rpc_caller.hpp"
 
-namespace btrpc {
+namespace myrpc {
 namespace client {
 
 class Client : public MuduoClient {
@@ -18,7 +17,7 @@ class Client : public MuduoClient {
                                 std::placeholders::_1, std::placeholders::_2);
         setMessageCallback(msg_cb);
 
-        auto rsp_cb = std::bind(&btrpc::client::Requestor::onResponse, _requestor.get(),
+        auto rsp_cb = std::bind(&myrpc::client::Requestor::onResponse, _requestor.get(),
                                 std::placeholders::_1, std::placeholders::_2);
         _dispatcher->registerHandler<BaseMessage>(MType::RSP_RPC, rsp_cb);
         _dispatcher->registerHandler<BaseMessage>(MType::RSP_SERVICE, rsp_cb);
@@ -26,7 +25,6 @@ class Client : public MuduoClient {
         connect();
         _conn = connection();
         if (_conn == nullptr) {
-            DLOG("_conn为空");
             exit(0);
         }
     }
@@ -57,4 +55,4 @@ class Client : public MuduoClient {
 };
 
 }  // namespace client
-}  // namespace btrpc
+}  // namespace myrpc

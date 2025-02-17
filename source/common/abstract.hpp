@@ -4,7 +4,7 @@
 #include "fields.hpp"
 #include "detail.hpp"
 
-namespace btrpc {
+namespace myrpc {
     class BaseMessage {
         public:
             using ptr = std::shared_ptr<BaseMessage>;

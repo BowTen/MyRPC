@@ -4,7 +4,7 @@
 #include "rpc_router.hpp"
 #include "server.hpp"
 
-namespace btrpc {
+namespace myrpc {
 namespace server {
 
 class RpcServer : public Server {
@@ -57,4 +57,4 @@ class RpcServer : public Server {
 };
 
 }  // namespace server
-}  // namespace btrpc
+}  // namespace myrpc

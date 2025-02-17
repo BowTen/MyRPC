@@ -13,7 +13,7 @@
 #include "fields.hpp"
 #include "message.hpp"
 
-namespace btrpc {
+namespace myrpc {
 class MuduoBuffer : public BaseBuffer {
    public:
     using ptr = std::shared_ptr<MuduoBuffer>;
@@ -58,7 +58,6 @@ class LVProtocol : public BaseProtocol {
             return false;
         }
         int32_t total_len = buf->peekInt32();
-        // DLOG("total_len:%d", total_len);
         if (buf->readableSize() < (total_len + lenFieldsLength)) {
             return false;
         }
@@ -94,7 +93,6 @@ class LVProtocol : public BaseProtocol {
         int32_t idlen = htonl(id.size());
         int32_t h_total_len = mtypeFieldsLength + idlenFieldsLength + id.size() + body.size();
         int32_t n_total_len = htonl(h_total_len);
-        // DLOG("h_total_len:%d", h_total_len);
         std::string result;
         result.reserve(h_total_len + lenFieldsLength);
         result.append((char*)&n_total_len, lenFieldsLength);
@@ -125,7 +123,7 @@ class MyConnection : public BaseConnection {
                     const BaseProtocol::ptr& protocol)
         : _protocol(protocol), _conn(conn) {}
     virtual void send(const BaseMessage::ptr& msg) override {
-		//DLOG("发送消息 rid=%s", msg->rid().c_str());
+		DLOG("发送消息 rid=%s", msg->rid().c_str());
         std::string body = _protocol->serialize(msg);
         _conn->send(body);
     }
@@ -189,7 +187,7 @@ class MuduoServer : public BaseServer {
             }
 
 			auto my_conn = ConnectionFactory::create(conn, _protocol);
-			ILOG("连接建立 %s:%d", my_conn->getHost().first.c_str(), my_conn->getHost().second);
+			DLOG("连接建立 %s:%d", my_conn->getHost().first.c_str(), my_conn->getHost().second);
             {
                 std::unique_lock<std::mutex> lock(_mutex);
                 _conns.insert(std::make_pair(conn, my_conn));
@@ -197,7 +195,7 @@ class MuduoServer : public BaseServer {
             if (_cb_connection)
                 _cb_connection(my_conn);
         } else {
-			ILOG("连接断开");
+			DLOG("连接断开");
 			BaseConnection::ptr muduo_conn;
             {
                 std::unique_lock<std::mutex> lock(_mutex);
@@ -318,12 +316,12 @@ class MuduoClient : public BaseClient {
    private:
     void onConnection(const muduo::net::TcpConnectionPtr& conn) {
         if (conn->connected()) {
-            std::cout << "连接建立！\n";
+			DLOG("连接建立！");
             _downlatch.countDown();  // 计数--，为0时唤醒阻塞
             _conn = ConnectionFactory::create(conn, _protocol);
 			if(_cb_connection) _cb_connection(_conn);
         } else {
-            std::cout << "连接断开！\n";
+			DLOG("连接断开！");
 			if(_cb_close) _cb_close(_conn);
             _conn.reset();
         }
@@ -378,4 +376,4 @@ class ClientFactory {
     }
 };
 
-}  // namespace btrpc
+}  // namespace myrpc

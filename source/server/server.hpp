@@ -3,7 +3,7 @@
 #include "../common/dispatcher.hpp"
 #include "../common/net.hpp"
 
-namespace btrpc {
+namespace myrpc {
 namespace server {
 
 class Server : public MuduoServer {
@@ -26,4 +26,4 @@ class Server : public MuduoServer {
 };
 
 }  // namespace server
-}  // namespace btrpc
+}  // namespace myrpc

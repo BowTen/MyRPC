@@ -11,7 +11,7 @@
 #include <sstream>
 #include <string>
 
-namespace btrpc {
+namespace myrpc {
 
 #define LDBG 0
 #define LINF 1
@@ -22,7 +22,7 @@ const char* log_level_str[] = {
     "INFO",
     "ERROR"};
 
-#define LDEFAUT LDBG
+#define LDEFAUT LINF
 
 #define LOG(level, format, ...)                                                                                             \
     if (level >= LDEFAUT) {                                                                                                 \
@@ -30,7 +30,7 @@ const char* log_level_str[] = {
         struct tm* lt = localtime(&t);                                                                                      \
         char time_tmp[32] = {0};                                                                                            \
         strftime(time_tmp, 31, "%Y-%m-%d %T", lt);                                                                          \
-        fprintf(stdout, "[%s][%s:%d][%s] " format "\n", btrpc::log_level_str[level], __FILE__, __LINE__, time_tmp, ##__VA_ARGS__); \
+        fprintf(stdout, "[%s][%s:%d][%s] " format "\n", myrpc::log_level_str[level], __FILE__, __LINE__, time_tmp, ##__VA_ARGS__); \
     }
 
 #define DLOG(format, ...) LOG(LDBG, format, ##__VA_ARGS__)
@@ -105,4 +105,4 @@ class UUID {
     }
 };
 
-}  // namespace btrpc
+}  // namespace myrpc

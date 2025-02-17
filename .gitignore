@@ -21,3 +21,10 @@ source/common/test_registry.cpp
 source/common/test_server.cpp
 source/common/test2_client.cpp
 source/common/test_provider.cpp
+source/demo/Add
+source/demo/discoverer
+source/demo/discoverer_cb
+source/demo/Div
+source/demo/provider
+source/demo/registry
+source/demo/Sub

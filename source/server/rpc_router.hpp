@@ -2,7 +2,7 @@
 #include "../common/message.hpp"
 #include "../common/net.hpp"
 
-namespace btrpc {
+namespace myrpc {
 namespace server {
 
 enum class VType {
@@ -39,7 +39,7 @@ class MethodDescribe {
     bool call(const Json::Value& params, Json::Value& result) {
 		_callback(params, result);
 		std::string res_json;
-		btrpc::JSON::serialize(result, res_json);
+		myrpc::JSON::serialize(result, res_json);
         if (rtypeCheck(result) == false) {
             ELOG("回调处理函数中的响应信息校验失败！");
             return false;
@@ -167,11 +167,11 @@ class RpcRouter {
                   RCode rcode) {
         auto msg = MessageFactory::create<RpcResponse>();
         msg->setId(req->rid());
-        msg->setMType(btrpc::MType::RSP_RPC);
+        msg->setMType(myrpc::MType::RSP_RPC);
         msg->setRCode(rcode);
         msg->setResult(res);
 		std::string json;
-		btrpc::JSON::serialize(msg->result(), json);
+		myrpc::JSON::serialize(msg->result(), json);
 		DLOG("发送rpc响应 orid=%s, rrid=%s", req->rid().c_str(), msg->rid().c_str());
         conn->send(msg);
     }
@@ -181,4 +181,4 @@ class RpcRouter {
 };
 
 }  // namespace server
-}  // namespace btrpc
+}  // namespace myrpc

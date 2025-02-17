@@ -2,7 +2,7 @@
 #include <unordered_set>
 #include "client.hpp"
 
-namespace btrpc {
+namespace myrpc {
 namespace client {
 
 // 服务注册、注销
@@ -59,6 +59,7 @@ class Provider {
             ELOG("服务注销失败，原因：%s", errReason(service_rsp->rcode()).c_str());
             return false;
         }
+		ILOG("服务 %s 注销成功", method.c_str());
         return true;
     }
 
@@ -70,6 +71,9 @@ class Provider {
 class Discoverer {
 	public:
 	using ptr = std::shared_ptr<Discoverer>;
+	using onServiceFirstDiscover = std::function<void(const std::string&, const Address&)>;
+	using onServiceUpdate = std::function<void(const std::string&, const Address&)>;
+	using onServiceLapse = std::function<void(const std::string&)>;
 	Discoverer(const std::string& host, int port)
 		: _client(std::make_shared<Client>(host, port)) {
 			auto svc_req_cb = std::bind(&Discoverer::onServiceUpdateRequest, this, 
@@ -87,7 +91,7 @@ class Discoverer {
 			return false;
 		}
 		lock.unlock();
-		auto ret = discoverMethod(method);
+		auto ret = discoverService(method);
 		lock.lock();
 		if(ret){
 			host = _method_host[method];
@@ -96,6 +100,19 @@ class Discoverer {
 			return false;
 		}
 	}
+
+	void setOnServiceFirstDiscover(const onServiceFirstDiscover& cb){
+		_service_first_discover_cb = cb;
+	}
+
+	void setOnServiceUpdate(const onServiceUpdate& cb){
+		_service_update_cb = cb;
+	}
+
+	void setOnServiceLapse(const onServiceLapse& cb){
+		_service_lapse_cb = cb;
+	}
+
 
 	private:
 	void onServiceUpdateRequest(const BaseConnection::ptr& conn, ServiceRequest::ptr& msg){
@@ -106,17 +123,23 @@ class Discoverer {
 			ILOG("服务 %s 更新：%s:%d", method.c_str(), host.first.c_str(), host.second);
 			std::unique_lock<std::mutex> lock(_mutex);
 			_method_host[method] = host;
+			if(_service_update_cb){
+				_service_update_cb(method, host);
+			}
 		}else if(optype == ServiceOptype::SERVICE_OFFLINE){
 			auto method = msg->method();
 			ILOG("服务 %s 下线", method.c_str());
 			std::unique_lock<std::mutex> lock(_mutex);
 			_method_host.erase(method);
+			if(_service_lapse_cb){
+				_service_lapse_cb(method);
+			}
 		}else{
 			ELOG("收到 %d 号请求，忽略", static_cast<int>(optype));
 		}
 	}
 
-	bool discoverMethod(const std::string& method){
+	bool discoverService(const std::string& method){
 		auto msg_req = MessageFactory::create<ServiceRequest>();
 		//msg_req->setId(UUID::uuid());
 		msg_req->setMType(MType::REQ_SERVICE);
@@ -144,6 +167,9 @@ class Discoverer {
 		std::unique_lock<std::mutex> lock(_mutex);
 		_visted.insert(method);
 		_method_host[method] = service_rsp->host();
+		if(_service_first_discover_cb){
+			_service_first_discover_cb(method, service_rsp->host());
+		}
 		return true;
 	}
 
@@ -151,7 +177,10 @@ class Discoverer {
 	Client::ptr _client;
 	std::unordered_map<std::string, Address> _method_host;
 	std::unordered_set<std::string> _visted;
+	onServiceFirstDiscover _service_first_discover_cb;
+	onServiceUpdate _service_update_cb;
+	onServiceLapse _service_lapse_cb;
 };
 
 }  // namespace client
-}  // namespace btrpc
+}  // namespace myrpc

@@ -13,13 +13,9 @@
 #include "../common/detail.hpp"
 #include "../common/fields.hpp"
 
-namespace btrpc {
+namespace myrpc {
 namespace server {
 	
-
-//bool operator<(const std::pair<std::chrono::system_clock::time_point, client::Client::ptr>& i, const std::pair<std::chrono::system_clock::time_point, client::Client::ptr>& j) {
-//    return i.first > j.first;
-//}
 
 class ServiceManager {
    public:
@@ -65,7 +61,6 @@ class ServiceManager {
                 return RCode::RCODE_NOT_FOUND_SERVICE;
             }
         }
-        // 获取连接
 		MethodHost mhost;
 		if(!popMethodHost(method, host, mhost)){
 			return RCode::RCODE_INTERNAL_ERROR;
@@ -74,6 +69,7 @@ class ServiceManager {
             std::unique_lock<std::mutex> lock(_mutex);
 			_host_info[host]->_methods.erase(method);
 			if(_host_info[host]->_methods.empty()){
+				_host_info[host]->_client->shutdown();
 				_host_info.erase(host);
 			}
 		}
@@ -96,7 +92,7 @@ class ServiceManager {
 		lock.lock();
 		if(ret){
 			host = mhost.second;
-			ILOG("发现服务 %s 分配主机 %s:%d", method.c_str(), host.first.c_str(), host.second);
+			ILOG("收到发现请求 %s 分配主机 %s:%d", method.c_str(), host.first.c_str(), host.second);
 			pt_set(method, _method_hosts[method]);
 			return true;
 		}
@@ -111,6 +107,10 @@ class ServiceManager {
 	void setServiceLapseCallback(const ServiceLapseCallback& cb){
 		std::unique_lock<std::mutex> lock(_mutex);
 		_service_lapse_cb = cb;
+	}
+
+	void setHeartbeatSec(int sec){
+		HEARTBEAT_SEC = sec;
 	}
 
 	void wait(const std::string& method){
@@ -143,13 +143,13 @@ class ServiceManager {
 		_close_cb = cb;
 	}
 
-	void pt_que(std::priority_queue<tim_cli, std::vector<tim_cli>, std::greater<tim_cli>> que){
-		DLOG("打印优先队列：大小：%d", (int)que.size());
+	void pt_que(std::queue<tim_cli> que){
+		DLOG("打印队列：大小：%d", (int)que.size());
 		while(!que.empty()){
-			if(que.top().second){
-				DLOG("时间：%d  主机：%s:%d", (int)std::chrono::duration_cast<std::chrono::seconds>(que.top().first.time_since_epoch()).count(), que.top().second->connection()->getHost().first.c_str(), que.top().second->connection()->getHost().second);
+			if(que.front().second){
+				DLOG("时间：%d  主机：%s:%d", (int)std::chrono::duration_cast<std::chrono::seconds>(que.front().first.time_since_epoch()).count(), que.front().second->connection()->getHost().first.c_str(), que.front().second->connection()->getHost().second);
 			}else{
-				DLOG("时间：%d  keepper", (int)std::chrono::duration_cast<std::chrono::seconds>(que.top().first.time_since_epoch()).count());
+				DLOG("时间：%d  keepper", (int)std::chrono::duration_cast<std::chrono::seconds>(que.front().first.time_since_epoch()).count());
 			}
 			que.pop();
 		}
@@ -159,10 +159,10 @@ class ServiceManager {
 		while(true){
 			_mutex.lock();
 			if(_que.empty()){
-				ELOG("优先队列空");
+				ELOG("队列空");
 				exit(0);
 			}
-			auto tp = _que.top();
+			auto tp = _que.front();
 			if(std::chrono::system_clock::now() >= tp.first){
 				DLOG("准备心跳检测");
 				//DLOG("优先队列大小：%d", (int)_que.size());
@@ -188,7 +188,7 @@ class ServiceManager {
 						tp.first = std::chrono::system_clock::now() + std::chrono::seconds(HEARTBEAT_SEC);
 						_que.push(tp);
 					}else{
-						ILOG("心跳探测失败，删除主机 %s:%d", tp.second->connection()->getHost().first.c_str(), tp.second->connection()->getHost().second);
+						ELOG("心跳探测失败，删除主机 %s:%d", tp.second->connection()->getHost().first.c_str(), tp.second->connection()->getHost().second);
 						_mutex.unlock();
 						remove(tp.second->connection()->getHost());
 						_mutex.lock();
@@ -204,8 +204,8 @@ class ServiceManager {
 			}
 			// 休眠到下一次心跳检测
 			auto cur = std::chrono::system_clock::now();
-			if(_que.top().first > cur){
-				auto d = std::chrono::duration_cast<std::chrono::milliseconds>(_que.top().first - cur);
+			if(_que.front().first > cur){
+				auto d = std::chrono::duration_cast<std::chrono::milliseconds>(_que.front().first - cur);
 				_mutex.unlock();
 				std::this_thread::sleep_for(d);
 				_mutex.lock();
@@ -218,7 +218,7 @@ class ServiceManager {
 		}
 	}
 
-    const static int HEARTBEAT_SEC;
+    static int HEARTBEAT_SEC;
     bool detect(const client::Client::ptr& cli, int& idle) {
         std::unique_lock<std::mutex> lock(_mutex);
         auto req = std::make_shared<ServiceRequest>();
@@ -259,6 +259,7 @@ class ServiceManager {
 				info->_methods.insert(method);
 				_host_info[host] = info;
 				_que.push(std::make_pair(std::chrono::system_clock::now() + std::chrono::seconds(HEARTBEAT_SEC), cli));
+				if(_service_appear_cb) std::thread(_service_appear_cb, method).detach();
 				return true;
 			}else{
 				DLOG("首次心跳检测失败");
@@ -347,6 +348,9 @@ class ServiceManager {
 
 	void remove(const Address& host){
 		std::unique_lock<std::mutex> lock(_mutex);
+		if(_host_info.count(host) == 0){
+			return;
+		}
 		for(auto &method : _host_info[host]->_methods){
 			MethodHost mhost;
 			lock.unlock();
@@ -357,13 +361,11 @@ class ServiceManager {
 		_host_info.erase(host);
 	}
 
-
-    
 	std::mutex _mutex;
     std::unordered_set<std::string> _wait;
     std::unordered_map<std::string, std::set<MethodHost>> _method_hosts;
     std::unordered_map<Address, HostInfo::ptr, AddrHash> _host_info;
-    std::priority_queue<tim_cli, std::vector<tim_cli>, std::greater<tim_cli>> _que;
+    std::queue<tim_cli> _que;
 	CloseCallback _close_cb;
 	ServiceAppearCallback _service_appear_cb;
 	ServiceLapseCallback _service_lapse_cb;
@@ -376,15 +378,23 @@ class DiscovererManager{
 	void gotoWait(const std::string& method, const BaseConnection::ptr& conn){
 		std::unique_lock<std::mutex> lock(_mutex);
 		_wait_que[method].push(conn);
+		_inque[method].insert(conn->getHost());
 	}
-
+	
 	void gotoUse(const std::string& method, const Address& host, const BaseConnection::ptr& conn){
 		std::unique_lock<std::mutex> lock(_mutex);
-		_use_que[method][host].push_back(conn);
+		_use_que[method][host].push(conn);
+		_inque[method].insert(conn->getHost());
 	}
 
 	BaseConnection::ptr outOfWait(const std::string& method){
 		std::unique_lock<std::mutex> lock(_mutex);
+		if(_wait_que.count(method)){
+			while(_wait_que[method].size() && !_wait_que[method].front()->connected()){
+				_inque[method].erase(_wait_que[method].front()->getHost());
+				_wait_que[method].pop();
+			}
+		}
 		if(_wait_que.count(method) == 0 || _wait_que[method].empty()){
 			return nullptr;
 		}
@@ -395,11 +405,17 @@ class DiscovererManager{
 	
 	BaseConnection::ptr outOfUse(const std::string& method, const Address& host){
 		std::unique_lock<std::mutex> lock(_mutex);
+		if(_use_que.count(method) && _use_que[method].count(host)){
+			while(_use_que[method][host].size() && !_use_que[method][host].front()->connected()){
+				_inque[method].erase(_use_que[method][host].front()->getHost());
+				_use_que[method][host].pop();
+			}
+		}
 		if(_use_que.count(method) == 0 || _use_que[method].count(host) == 0 || _use_que[method][host].empty()){
 			return nullptr;
 		}
-		auto conn = _use_que[method][host].back();
-		_use_que[method][host].pop_back();
+		auto conn = _use_que[method][host].front();
+		_use_que[method][host].pop();
 		return conn;
 	}
 
@@ -408,10 +424,17 @@ class DiscovererManager{
 		return _wait_que.count(method) > 0 && !_wait_que[method].empty();
 	}
 
+	bool inque(const std::string& method, const Address& host){
+		std::unique_lock<std::mutex> lock(_mutex);
+		return _inque.count(method) > 0 && _inque[method].count(host) > 0;
+	}
+
+
 	private:
 	std::mutex _mutex;
+	std::unordered_map<std::string, std::unordered_set<Address, AddrHash>> _inque;
 	std::unordered_map<std::string, std::queue<BaseConnection::ptr>> _wait_que;
-	std::unordered_map<std::string, std::unordered_map<Address, std::vector<BaseConnection::ptr>, AddrHash>> _use_que;
+	std::unordered_map<std::string, std::unordered_map<Address, std::queue<BaseConnection::ptr>, AddrHash>> _use_que;
 };
 
 
@@ -439,17 +462,24 @@ class ServiceRegistry {
 		_server->start();
 	}
 
+	void setHeartbeatSec(int sec){
+		_service_manager->setHeartbeatSec(sec);
+	}
+
    private:
     void onServiceCallback(const BaseConnection::ptr& conn, ServiceRequest::ptr& msg) {
         auto optype = msg->optype();
         if (optype == ServiceOptype::SERVICE_REGISTRY) {
-            ILOG("收到 服务注册 请求");
+            DLOG("收到 服务注册 请求");
 			return responseRCode(msg->rid(), conn, _service_manager->registry(msg->method(), msg->host()));
 		} else if (optype == ServiceOptype::SERVICE_DEREGISTER) {
-            ILOG("收到 服务注销 请求");
+            DLOG("收到 服务注销 请求");
 			return responseRCode(msg->rid(), conn, _service_manager->deregister(msg->method(), msg->host()));
 		} else if (optype == ServiceOptype::SERVICE_DISCOVERY) {
-            ILOG("收到 服务发现 请求");
+            DLOG("收到 服务发现 请求");
+			if(_discoverer_manager->inque(msg->method(), conn->getHost())){
+				return responseRCode(msg->rid(), conn, RCode::RCODE_NOT_FOUND_SERVICE);
+			}
 			Address host;
 			if(_service_manager->discover(msg->method(), host)){
 				_discoverer_manager->gotoUse(msg->method(), host, conn);
@@ -492,19 +522,19 @@ class ServiceRegistry {
 	}
 
 	void onServiceAppear(const std::string& method){
-		ILOG("服务 %s 可用", method.c_str());
+		DLOG("服务 %s 可用", method.c_str());
 		while(true){
 			auto conn = _discoverer_manager->outOfWait(method);
 			if(conn == nullptr){
 				_service_manager->stopWait(method);
-				ILOG("等待服务 %s 的连接已经全部处理", method.c_str());
+				DLOG("等待服务 %s 的连接已经全部处理", method.c_str());
 				break;
 			}
 			Address host;
 			if(_service_manager->discover(method, host)){
 				_discoverer_manager->gotoUse(method, host, conn);
 				requestUpdate(conn, method, host, ServiceOptype::SERVICE_UPDATE);
-				ILOG("服务 %s 可用，分配给连接 %s:%d", method.c_str(), conn->getHost().first.c_str(), conn->getHost().second);
+				ILOG("等待服务 %s 的discoverer %s:%d 获得主机更新，新主机 %s:%d", method.c_str(), conn->getHost().first.c_str(), conn->getHost().second, host.first.c_str(), host.second);
 			}else{
 				_discoverer_manager->gotoWait(method, conn);
 				ILOG("服务 %s 空闲量已耗尽，等待新服务上线", method.c_str());
@@ -518,7 +548,7 @@ class ServiceRegistry {
 		while(true){
 			auto conn = _discoverer_manager->outOfUse(method, host);
 			if(conn == nullptr){
-				ILOG("使用服务 %s:%d 的客户端已经全部通知", host.first.c_str(), host.second);
+				DLOG("使用服务 %s:%d 的discoverer已经全部通知", host.first.c_str(), host.second);
 				break;
 			}
 			if(idle){
@@ -526,13 +556,13 @@ class ServiceRegistry {
 				if(_service_manager->discover(method, new_host)){
 					_discoverer_manager->gotoUse(method, new_host, conn);
 					requestUpdate(conn, method, new_host, ServiceOptype::SERVICE_UPDATE);
-					ILOG("服务 %s:%d 失效，分配新主机 %s:%d", host.first.c_str(), host.second, new_host.first.c_str(), new_host.second);
+					ILOG("discoverer %s:%d 使用 %s 服务的原主机 %s:%d 失效，新主机 %s:%d", conn->getHost().first.c_str(), conn->getHost().second, method.c_str(), host.first.c_str(), host.second, new_host.first.c_str(), new_host.second);
 				}else{
 					idle = false;
 				}
 			}
 			if(!idle){
-				ILOG("服务 %s:%d 失效，没有新主机", host.first.c_str(), host.second);
+				ILOG("discoverer %s:%d 使用 %s 服务的原主机 %s:%d 失效，等待新服务上线", conn->getHost().first.c_str(), conn->getHost().second, method.c_str(), host.first.c_str(), host.second);
 				requestUpdate(conn, method, host, ServiceOptype::SERVICE_OFFLINE);
 				_discoverer_manager->gotoWait(method, conn);
 			}
@@ -549,7 +579,7 @@ class ServiceRegistry {
 	DiscovererManager::ptr _discoverer_manager;
 };
 
-const int ServiceManager::HEARTBEAT_SEC = 5;
+int ServiceManager::HEARTBEAT_SEC = 30;
 
 }  // namespace server
-}  // namespace btrpc
+}  // namespace myrpc

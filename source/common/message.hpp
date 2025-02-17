@@ -3,7 +3,7 @@
 #include "detail.hpp"
 #include "fields.hpp"
 
-namespace btrpc {
+namespace myrpc {
 class JsonMessage : public BaseMessage {
    public:
     using ptr = std::shared_ptr<JsonMessage>;
@@ -84,52 +84,7 @@ class RpcRequest : public JsonRequest {
         _body[KEY_PARAMS] = params;
     }
 };
-class TopicRequest : public JsonRequest {
-   public:
-    using ptr = std::shared_ptr<TopicRequest>;
-	TopicRequest() {
-		_mtype = MType::REQ_TOPIC;
-	}
-    virtual bool check() override {
-        // rpc请求中，包含请求方法名称-字符串，参数字段-对象
-        if (_body[KEY_TOPIC_KEY].isNull() == true ||
-            _body[KEY_TOPIC_KEY].isString() == false) {
-            ELOG("主题请求中没有主题名称或主题名称类型错误！");
-            return false;
-        }
-        if (_body[KEY_OPTYPE].isNull() == true ||
-            _body[KEY_OPTYPE].isIntegral() == false) {
-            ELOG("主题请求中没有操作类型或操作类型的类型错误！");
-            return false;
-        }
-        if (_body[KEY_OPTYPE].asInt() == (int)TopicOptype::TOPIC_PUBLISH &&
-            (_body[KEY_TOPIC_MSG].isNull() == true ||
-             _body[KEY_TOPIC_MSG].isString() == false)) {
-            ELOG("主题消息发布请求中没有消息内容字段或消息内容类型错误！");
-            return false;
-        }
-        return true;
-    }
 
-    std::string topicKey() {
-        return _body[KEY_TOPIC_KEY].asString();
-    }
-    void setTopicKey(const std::string& key) {
-        _body[KEY_TOPIC_KEY] = key;
-    }
-    TopicOptype optype() {
-        return (TopicOptype)_body[KEY_OPTYPE].asInt();
-    }
-    void setOptype(TopicOptype optype) {
-        _body[KEY_OPTYPE] = (int)optype;
-    }
-    std::string topicMsg() {
-        return _body[KEY_TOPIC_MSG].asString();
-    }
-    void setTopicMsg(const std::string& msg) {
-        _body[KEY_TOPIC_MSG] = msg;
-    }
-};
 
 class ServiceRequest : public JsonRequest {
    public:
@@ -287,10 +242,6 @@ class MessageFactory {
                 return std::make_shared<RpcResponse>();
             case MType::RSP_CONNECT:
                 return std::make_shared<ConnectResponse>();
-            case MType::REQ_TOPIC:
-                return std::make_shared<TopicRequest>();
-            case MType::RSP_TOPIC:
-                return std::make_shared<ConnectResponse>();
             case MType::REQ_SERVICE:
                 return std::make_shared<ServiceRequest>();
             case MType::RSP_SERVICE:
@@ -304,4 +255,4 @@ class MessageFactory {
         return std::make_shared<T>(std::forward(args)...);
     }
 };
-}  // namespace btrpc
+}  // namespace myrpc

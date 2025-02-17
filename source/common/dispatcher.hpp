@@ -2,7 +2,7 @@
 #include "message.hpp"
 #include "net.hpp"
 
-namespace btrpc {
+namespace myrpc {
 
 template <typename T>
 void MessageCallbackAdapter(const BaseConnection::ptr& conn, BaseMessage::ptr& msg,
@@ -37,7 +37,7 @@ class Dispatcher {
 
    private:
     std::mutex _mutex;
-    std::unordered_map<MType, btrpc::MessageCallback> _handlers;
+    std::unordered_map<MType, myrpc::MessageCallback> _handlers;
 
 };
 }  // namespace bitrpc

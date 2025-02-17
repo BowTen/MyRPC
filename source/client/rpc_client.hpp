@@ -1,7 +1,7 @@
 #pragma once
 #include "client.hpp"
 
-namespace btrpc {
+namespace myrpc {
 namespace client {
 
 class RpcClient : public Client {
@@ -10,14 +10,12 @@ class RpcClient : public Client {
     RpcClient(const std::string& sip, int sport) : Client(sip, sport) {}
 
 	bool call(const std::string& method, const Json::Value& params, Json::Value& result) {
-        DLOG("开始同步rpc调用...");
         // 1. 组织请求
         auto req_msg = MessageFactory::create<RpcRequest>();
         //req_msg->setId(UUID::uuid());
         req_msg->setMType(MType::REQ_RPC);
         req_msg->setMethod(method);
         req_msg->setParams(params);
-		DLOG("rpc请求 id=%s", req_msg->rid().c_str());
         BaseMessage::ptr rsp_msg;
         // 2. 发送请求
         bool ret = send(std::dynamic_pointer_cast<BaseMessage>(req_msg), rsp_msg);
@@ -25,7 +23,6 @@ class RpcClient : public Client {
             ELOG("同步Rpc请求失败！");
             return false;
         }
-        DLOG("收到响应，进行解析，获取结果!");
         // 3. 等待响应
         auto rpc_rsp_msg = std::dynamic_pointer_cast<RpcResponse>(rsp_msg);
         if (!rpc_rsp_msg) {
@@ -37,7 +34,6 @@ class RpcClient : public Client {
             return false;
         }
         result = rpc_rsp_msg->result();
-        DLOG("结果设置完毕！");
         return true;
     }
 
@@ -50,4 +46,4 @@ class RpcClient : public Client {
 };
 
 }  // namespace client
-}  // namespace btrpc
+}  // namespace myrpc
