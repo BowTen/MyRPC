@@ -36,13 +36,6 @@ class RpcClient : public Client {
         result = rpc_rsp_msg->result();
         return true;
     }
-
-    void onConnectMessage(const BaseConnection::ptr& conn, ConnectResponse::ptr& msg) {
-        ELOG("服务端连接信息：%s", errReason(msg->rcode()).c_str());
-		if(msg->rcode() == RCode::RCODE_CONNECT_OVERFLOW){
-			exit(0);
-		}
-    }
 };
 
 }  // namespace client

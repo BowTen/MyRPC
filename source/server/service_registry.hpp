@@ -86,14 +86,14 @@ class ServiceManager {
 			return false;
 		}
 		MethodHost mhost;
-		pt_set(method, _method_hosts[method]);
+		//pt_set(method, _method_hosts[method]);
 		lock.unlock();
 		auto ret = choseMethodHost(method, mhost);
 		lock.lock();
 		if(ret){
 			host = mhost.second;
 			ILOG("收到发现请求 %s 分配主机 %s:%d", method.c_str(), host.first.c_str(), host.second);
-			pt_set(method, _method_hosts[method]);
+			//pt_set(method, _method_hosts[method]);
 			return true;
 		}
 		return false;
@@ -113,15 +113,6 @@ class ServiceManager {
 		HEARTBEAT_SEC = sec;
 	}
 
-	void wait(const std::string& method){
-		std::unique_lock<std::mutex> lock(_mutex);
-		_wait.insert(method);
-	}
-
-	void stopWait(const std::string& method){
-		std::unique_lock<std::mutex> lock(_mutex);
-		_wait.erase(method);
-	}
 
    private:
 	using MethodHost = std::pair<int, Address>;
@@ -133,14 +124,18 @@ class ServiceManager {
         std::unordered_set<std::string> _methods;
     };
 
-	void onClose(const BaseConnection::ptr& conn){
-		remove(conn->getHost());
-		if(_close_cb) _close_cb(conn);
+	void wait(const std::string& method){
+		std::unique_lock<std::mutex> lock(_mutex);
+		_wait.insert(method);
 	}
 
-	void setCloseCallback(const CloseCallback& cb){
+	void stopWait(const std::string& method){
 		std::unique_lock<std::mutex> lock(_mutex);
-		_close_cb = cb;
+		_wait.erase(method);
+	}
+
+	void onClose(const BaseConnection::ptr& conn){
+		remove(conn->getHost());
 	}
 
 	void pt_que(std::queue<tim_cli> que){
@@ -361,12 +356,12 @@ class ServiceManager {
 		_host_info.erase(host);
 	}
 
+	friend class ServiceRegistry;
 	std::mutex _mutex;
     std::unordered_set<std::string> _wait;
     std::unordered_map<std::string, std::set<MethodHost>> _method_hosts;
     std::unordered_map<Address, HostInfo::ptr, AddrHash> _host_info;
     std::queue<tim_cli> _que;
-	CloseCallback _close_cb;
 	ServiceAppearCallback _service_appear_cb;
 	ServiceLapseCallback _service_lapse_cb;
 };
