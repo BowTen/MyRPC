@@ -17,14 +17,14 @@ namespace myrpc {
 namespace server {
 	
 
-class ServiceManager {
+class HostManager {
    public:
    	using ServiceAppearCallback = std::function<void(const std::string&)>;
 	using ServiceLapseCallback = std::function<void(const std::string&, const Address&)>;
-    using ptr = std::shared_ptr<ServiceManager>;
+    using ptr = std::shared_ptr<HostManager>;
     using tim_cli = std::pair<std::chrono::system_clock::time_point, client::Client::ptr>;
 
-    ServiceManager() {
+    HostManager() {
 		tim_cli keepper = std::make_pair(std::chrono::system_clock::now(), nullptr);
 		_que.push(keepper);
 		std::thread detecter([this](){
@@ -96,6 +96,7 @@ class ServiceManager {
 			//pt_set(method, _method_hosts[method]);
 			return true;
 		}
+		ILOG("收到发现请求 %s 选择主机失败", method.c_str());
 		return false;
 	}
 
@@ -266,7 +267,7 @@ class ServiceManager {
     client::Client::ptr createClient(const Address& host) {
 		DLOG("主机 %s:%d 新建连接", host.first.c_str(), host.second);
 		auto cli = std::make_shared<client::Client>(host.first, host.second);
-		cli->setCloseCallback(std::bind(&ServiceManager::onClose, this, std::placeholders::_1));
+		cli->setCloseCallback(std::bind(&HostManager::onClose, this, std::placeholders::_1));
 		return cli;
 	}
 
@@ -424,6 +425,12 @@ class DiscovererManager{
 		return _inque.count(method) > 0 && _inque[method].count(host) > 0;
 	}
 
+	void outque(const Address& host){
+		for(auto &st : _inque){
+			st.second.erase(host);
+		}
+	}
+
 
 	private:
 	std::mutex _mutex;
@@ -436,14 +443,14 @@ class DiscovererManager{
 //服务注册、注销 ok
 //服务发现 ok
 //服务状态变更：可用服务出现提醒(新服务上线、主机空闲)，服务失效提醒(服务注销、主机下线)(服务失效时优先为寻找其他可用主机替换)
-//                             ServiceManager回调 ok           ServiceManager回调 ok
+//                             HostManager回调 ok           HostManager回调 ok
 
 class ServiceRegistry {
    public:
     using ptr = std::shared_ptr<ServiceRegistry>;
     ServiceRegistry(int port)
         : _server(std::make_shared<Server>(port)),
-		  _service_manager(std::make_shared<ServiceManager>()),
+		  _service_manager(std::make_shared<HostManager>()),
 		  _discoverer_manager(std::make_shared<DiscovererManager>()) {
         auto svc_req_cb = std::bind(&ServiceRegistry::onServiceCallback, this,
                                     std::placeholders::_1, std::placeholders::_2);
@@ -451,6 +458,8 @@ class ServiceRegistry {
 
 		_service_manager->setServiceAppearCallback(std::bind(&ServiceRegistry::onServiceAppear, this, std::placeholders::_1));
 		_service_manager->setServiceLapseCallback(std::bind(&ServiceRegistry::onServiceLapse, this, std::placeholders::_1, std::placeholders::_2));
+
+		_server->setCloseCallback(std::bind(&ServiceRegistry::onDisConnect, this, std::placeholders::_1));
     }
 
 	void start(){
@@ -569,12 +578,17 @@ class ServiceRegistry {
 		}
 	}
 
+	void onDisConnect(const BaseConnection::ptr& conn){
+		auto host = conn->getHost();
+		_discoverer_manager->outque(host);
+	}
+
     std::shared_ptr<Server> _server;
-	ServiceManager::ptr _service_manager;
+	HostManager::ptr _service_manager;
 	DiscovererManager::ptr _discoverer_manager;
 };
 
-int ServiceManager::HEARTBEAT_SEC = 30;
+int HostManager::HEARTBEAT_SEC = 30;
 
 }  // namespace server
 }  // namespace myrpc

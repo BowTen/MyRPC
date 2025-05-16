@@ -1,4 +1,5 @@
 #include "../server/rpc_server.hpp"
+#include <muduo/base/Logging.h>
 
 void Add(const Json::Value& params, Json::Value &res){
 	int num1 = params["num1"].asInt64();
@@ -7,6 +8,8 @@ void Add(const Json::Value& params, Json::Value &res){
 }
 
 int main(int argc, char* argv[]){
+	// 设置全局日志级别为WARN
+	muduo::Logger::setLogLevel(muduo::Logger::WARN);
 
 	if(argc != 3){
 		std::cout << "Usage: Add [port] [max_connections]\n";
