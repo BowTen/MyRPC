@@ -171,6 +171,9 @@ class MuduoServer : public BaseServer {
         std::unique_lock<std::mutex> lock(_mutex);
         _max_connections = cnt;
     }
+	void setThreadNum(int numThreads){
+		_server.setThreadNum(numThreads);
+	}
 
    private:
     void onConnection(const muduo::net::TcpConnectionPtr& conn) {

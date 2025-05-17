@@ -23,14 +23,14 @@ class Dispatcher {
 	}
 
     void onMessage(const BaseConnection::ptr& conn, BaseMessage::ptr& msg) {
-		// 找到消息类型对应的业务处理函数，进行调用即可
-        std::unique_lock<std::mutex> lock(_mutex);
 		//DLOG("dispatcher收到消息，rid=%s", msg->rid().c_str());
-		auto it = _handlers.find(msg->mtype());
-		if(it != _handlers.end()){
-			return (it->second)(conn, msg);
+		myrpc::MessageCallback* callback = nullptr;
+		{
+			std::unique_lock<std::mutex> lock(_mutex);
+			auto it = _handlers.find(msg->mtype());
+			if(it != _handlers.end()) callback = &(it->second);
 		}
-        // 没有找到指定类型的处理回调--因为客户端和服务端都是我们自己设计的，因此不可能出现这种情况
+		if(callback) return (*callback)(conn, msg);
         ELOG("收到未知类型的消息: %d！", static_cast<int>(msg->mtype()));
         conn->shutdown();
     }
