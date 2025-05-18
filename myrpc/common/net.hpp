@@ -122,6 +122,13 @@ class MyConnection : public BaseConnection {
     MyConnection(const muduo::net::TcpConnectionPtr& conn,
                     const BaseProtocol::ptr& protocol)
         : _protocol(protocol), _conn(conn) {}
+    virtual void sendInLoop(const BaseMessage::ptr& msg) override {
+		DLOG("发送消息 rid=%s", msg->rid().c_str());
+        std::string body = _protocol->serialize(msg);
+		_conn->getLoop()->runInLoop([conn = _conn, body]() {
+			conn->send(body);
+		});
+    }
     virtual void send(const BaseMessage::ptr& msg) override {
 		DLOG("发送消息 rid=%s", msg->rid().c_str());
         std::string body = _protocol->serialize(msg);

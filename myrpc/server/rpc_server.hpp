@@ -10,16 +10,17 @@ namespace server {
 class RpcServer : public Server {
    public:
     using prt = std::shared_ptr<RpcServer>;
-    RpcServer(int port, int max_connections = (1 << 16), int overflow = 5)
+    RpcServer(int port, int max_connections = (1 << 16), int overflow = 5, size_t ioThreads = 0, size_t workerThreads = 0)
         : Server(port, max_connections + overflow),
           _max_connections(max_connections),
-          _router(std::make_shared<RpcRouter>()) {
+          _router(std::make_shared<RpcRouter>(workerThreads)) {
         auto rpc_req_cb = std::bind(&RpcRouter::onRpcRequest, _router.get(),
                                     std::placeholders::_1, std::placeholders::_2);
         registerHandler<RpcRequest>(MType::REQ_RPC, rpc_req_cb);
         auto svc_req_cb = std::bind(&RpcServer::onServiceRequest, this,
                                     std::placeholders::_1, std::placeholders::_2);
         registerHandler<ServiceRequest>(MType::REQ_SERVICE, svc_req_cb);
+		setThreadNum(ioThreads);
     }
 
     void registerMethod(const MethodDescribe::ptr& service) {
