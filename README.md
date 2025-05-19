@@ -1,15 +1,14 @@
 # MyRPC ✨
 
-一个基于 **Muduo 库**的高性能 RPC 框架，支持高并发、多路复用、动态服务注册/发现，并内置智能负载均衡算法。让分布式服务调用更简单！🙌
+一个基于 **Muduo 库**的 RPC 框架，使用自定义LV协议，使用线程池处理RPC业务逻辑，还内置了使用自主设计的负载均衡算法的服务注册中心！🙌
 
 ------
 
-## 🌟 核心特性
+## 🌟 核心模块
 
-- ✅ **高并发通信**：基于 Muduo 库封装 LV 协议，提供 `myrpc::server::Server` 和 `myrpc::client::Client` 类。
-- ✅ **RPC 核心模块**：实现服务端 `myrpc::server::RpcServer` 与客户端 `myrpc::client::RpcClient`。
-- ✅ **服务治理**：支持动态注册/注销、服务发现、负载均衡，提供 `ServiceRegistry`、`Provider`、`Discoverer` 类。
-- ✅ **智能负载均衡**：基于红黑树维护最大空闲主机，心跳检测保活，队列化请求调度。
+- ✅ **自定义LV协议**：提供 `myrpc::server::Server` 和 `myrpc::client::Client` 类。
+- ✅ **RPC 调用模块**：服务端 `myrpc::server::RpcServer` ，客户端 `myrpc::client::RpcClient`。
+- ✅ **服务注册中心**：支持动态注册/注销、服务发现、负载均衡，提供 `ServiceRegistry`、`Provider`、`Discoverer` 类。基于红黑树维护最大空闲主机，心跳检测保活，队列化请求调度。
 
 ------
 
@@ -34,7 +33,7 @@
 ### 📡 服务实现端（示例：实现加法服务）
 
 ```cpp
-#include "server/rpc_server.hpp"
+#include "myrpc/server/rpc_server.hpp"
 
 void Add(const Json::Value& params, Json::Value &res){
 	int num1 = params["num1"].asInt64();
@@ -50,7 +49,7 @@ int main(int argc, char* argv[]){
 	}
 	int port = atoi(argv[1]);
 	int max_connections = atoi(argv[2]);
-	auto server = std::make_shared<myrpc::server::RpcServer>(port, max_connections, 0);
+	auto server = std::make_shared<myrpc::server::RpcServer>(port, max_connections, 0, 2, 2);
 
 	//构造方法描述
 	auto sdf = myrpc::server::SDescribeFactory();
@@ -59,6 +58,7 @@ int main(int argc, char* argv[]){
 	sdf.setParamsDesc("num2", myrpc::server::VType::INTEGRAL);
 	sdf.setReturnType(myrpc::server::VType::INTEGRAL);
 	sdf.setCallback(Add);
+	sdf.setUseIOThread(false);
 	auto sd = sdf.build();
 
 	//注册方法
@@ -72,7 +72,7 @@ int main(int argc, char* argv[]){
 ### 📡 服务调用端
 
 ```cpp
-#include "client/rpc_client.hpp"
+#include "myrpc/client/rpc_client.hpp"
 
 int main(int argc, char* argv[]){
 
@@ -82,7 +82,7 @@ int main(int argc, char* argv[]){
 	}
 	std::string ip(argv[1]);
 	int port = atoi(argv[2]);
-	auto client = std::make_shared<btrpc::client::RpcClient>(ip, port);
+	auto client = std::make_shared<myrpc::client::RpcClient>(ip, port);
 
 	std::string method;
 	int num1, num2;
@@ -95,7 +95,7 @@ int main(int argc, char* argv[]){
 	params["num2"] = num2;
 	client->call(method, params, res);
 	
-	std::cout << "result:\n" << btrpc::JSON::serialize(res) << '\n';
+	std::cout << "result:\n" << myrpc::JSON::serialize(res) << '\n';
 
 	return 0;
 }
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]){
 ### 服务注册中心
 
 ```cpp
-#include "server/service_registry.hpp"
+#include "myrpc/server/service_registry.hpp"
 
 int main(int argc, char* argv[]){
 
@@ -129,7 +129,7 @@ int main(int argc, char* argv[]){
 ### 服务提供者（注册者）
 
 ```cpp
-#include "client/registry_discover.hpp"
+#include "myrpc/client/registry_discover.hpp"
 
 int main(int argc, char* argv[]){
 
@@ -164,9 +164,9 @@ int main(int argc, char* argv[]){
 ### 🔍 服务发现+服务调用
 
 ```cpp
-#include "client/registry_discover.hpp"
-#include "client/rpc_client.hpp"
-#include<bits/stdc++.h>
+#include "myrpc/client/registry_discover.hpp"
+#include "myrpc/client/rpc_client.hpp"
+#include <bits/stdc++.h>
 
 std::unordered_map<std::string, myrpc::client::RpcClient::ptr>clis;
 
